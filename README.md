@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/session-hub.png" alt="pi-session-hub: sessions from JCode, OpenCode, Pi, Claude Code, Codex and Crush in one full-screen list, with the selected session's metadata and transcript on the right" width="880">
+  <img src="https://raw.githubusercontent.com/Gateton/pi-session-hub/main/assets/session-hub.png" alt="pi-session-hub: sessions from JCode, OpenCode, Pi, Claude Code, Codex and Crush in one full-screen list, with the selected session's metadata and transcript on the right" width="880">
 
 # pi-session-hub
 

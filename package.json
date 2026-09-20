@@ -53,6 +53,7 @@
   ],
   "scripts": {
     "test": "node test/acceptance.mjs",
-    "test:smoke": "node test/smoke.mjs"
+    "test:smoke": "node test/smoke.mjs",
+    "prepublishOnly": "node test/acceptance.mjs"
   }
 }
