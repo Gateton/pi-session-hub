@@ -272,6 +272,55 @@ skills/session-hub/         agent-facing skill
 Adding a harness means adding one file under `src/adapters/` that implements
 `SessionAdapter` and registering it in `src/adapters/registry.ts`.
 
+## Publishing
+
+The [Pi package gallery](https://pi.dev/packages) indexes npm automatically: it
+lists every package tagged with the `pi-package` keyword. There is no submission
+form, no review, and no repository template to follow. Publish to npm and the
+gallery picks it up within minutes.
+
+```bash
+npm login                 # once, interactive (browser / 2FA)
+npm publish               # publishes pi-session-hub
+```
+
+Then anyone can install it:
+
+```bash
+pi install npm:pi-session-hub
+```
+
+What the listing needs, and what this repo already has:
+
+| Requirement | Status |
+|---|---|
+| `"pi-package"` in `keywords` | yes |
+| A `pi` manifest in `package.json` (or conventional `extensions/`, `skills/` dirs) | yes, both |
+| A `description` (shown on the gallery card) | yes |
+| `repository` / `homepage` / `bugs` (the card links to the repo) | yes |
+
+Optional gallery preview, if you want a card image or video:
+
+```json
+{
+  "pi": {
+    "extensions": ["./extensions"],
+    "skills": ["./skills"],
+    "image": "https://.../screenshot.png"
+  }
+}
+```
+
+To ship a change: bump `version` and run `npm publish` again.
+
+Before publishing, verify the artifact rather than the repo:
+
+```bash
+npm pack --dry-run         # inspect exactly what ships
+npm pack && tar xzf pi-session-hub-*.tgz
+pi -e ./package            # load the packed package the way npm would
+```
+
 ## Development
 
 ```bash
