@@ -5,10 +5,7 @@
 
 **One list for every coding-agent session on your machine. Browse, search and continue sessions from Claude Code, Codex, OpenCode, Crush and JCode without leaving Pi.**
 
-<!-- Once published, swap this static badge for the live one:
-     [![npm](https://img.shields.io/npm/v/pi-session-hub?label=npm)](https://www.npmjs.com/package/pi-session-hub)
-     The live badge reads "package not found" until the first publish. -->
-[![npm](https://img.shields.io/badge/npm-pi--session--hub-cb3837)](https://www.npmjs.com/package/pi-session-hub)
+[![npm](https://img.shields.io/npm/v/pi-session-hub?label=npm)](https://www.npmjs.com/package/pi-session-hub)
 [![Pi extension](https://img.shields.io/badge/Pi-extension-19c7d4)](https://github.com/earendil-works/pi-coding-agent)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.5-1f8f4d)](package.json)
 [![License](https://img.shields.io/badge/license-MIT-f5a623)](LICENSE)
@@ -271,12 +268,35 @@ The acceptance suite runs against real stores and against a synthetic foreign ho
 
 ## Publishing
 
-The [Pi package gallery](https://pi.dev/packages) indexes npm automatically: it lists every package tagged with the `pi-package` keyword. There is no submission form, no review, and no repository template to follow.
+The [Pi package gallery](https://pi.dev/packages) indexes npm automatically: it lists every package tagged with the `pi-package` keyword. There is no submission form, no review, and no repository template to follow. Once published, the package has its own page at [pi.dev/packages/pi-session-hub](https://pi.dev/packages/pi-session-hub).
 
 ```bash
 npm login
 npm publish
 ```
+
+**`npm login` alone is not enough.** npm requires a second factor to publish, and a web-login session cannot satisfy it, so the upload is rejected:
+
+```text
+403 Forbidden - Two-factor authentication or granular access token with bypass 2fa
+enabled is required to publish packages.
+```
+
+Create a **granular access token** at [npmjs.com/settings/&lt;user&gt;/tokens](https://www.npmjs.com/settings) with **Bypass two-factor authentication** checked (it is **unchecked by default**, which is the easy mistake) and **Read and write (publish and stage)** on all packages, then:
+
+```bash
+npm config set //registry.npmjs.org/:_authToken npm_...
+npm publish
+```
+
+Or enable 2FA on the account and publish with `npm publish --otp=<code>`.
+
+Two things worth knowing:
+
+- A token can authenticate (`npm whoami` works) and still be unable to publish, because the bypass flag is missing. `npm token list` labels it a "Publish token" either way, so the label is not proof that the bypass is on.
+- npm is removing direct publish from bypass-2FA tokens in **January 2027**. After that, automated publishing has to move to [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) or [staged publishing](https://docs.npmjs.com/staged-publishing).
+
+The gallery's browsable list is a periodic snapshot sorted by download count, so a brand-new package appears in the list only after the next rebuild, while its detail page works immediately.
 
 To ship a change, bump `version` and publish again. Before publishing, verify the artifact rather than the repo:
 
