@@ -15,6 +15,7 @@ import type {
 import { emptyFidelity } from "../types.ts";
 import type { NativeResumeAction, SessionAdapter } from "./types.ts";
 import {
+  addSearchText,
   contentToText,
   countTools,
   deriveRepo,
@@ -27,6 +28,7 @@ import {
   pushMessage,
   readTextCapped,
   safeStat,
+  searchTextFrom,
   titleFromPreview,
   uniqSorted,
   walkFiles,
@@ -142,6 +144,7 @@ export class PiAdapter implements SessionAdapter {
     let model: string | null = null;
 
     const messages: { role: string; text: string }[] = [];
+    const searchAcc: string[] = [];
     const toolNames: string[] = [];
     const commands: string[] = [];
     const filesChanged = new Set<string>();
@@ -212,11 +215,11 @@ export class PiAdapter implements SessionAdapter {
         if (toolName) collectPaths(msg.details, toolName, filesChanged, filesRead);
       }
 
+      const textPart = contentToText(msg.content);
+      if (textPart) addSearchText(searchAcc, role, textPart);
       if (withMessages) {
-        const textPart = contentToText(msg.content);
         if (textPart) pushMessage(messages, role, textPart);
       } else if (role === "user" && messages.length < 3) {
-        const textPart = contentToText(msg.content);
         if (textPart) pushMessage(messages, role, textPart, 3);
       }
     }
@@ -245,6 +248,7 @@ export class PiAdapter implements SessionAdapter {
       messageCount,
       toolCount: toolNames.length,
       preview,
+      searchText: searchTextFrom(searchAcc),
       fidelity: {
         ...emptyFidelity(),
         hasToolCalls: toolNames.length > 0,

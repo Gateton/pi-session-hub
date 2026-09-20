@@ -235,6 +235,48 @@ export function uniqSorted(values: Iterable<string>): string[] {
   return Array.from(new Set(values)).sort();
 }
 
+/**
+ * Character budget for the searchable conversation excerpt per session.
+ *
+ * Large enough to cover a whole ordinary session (the longest on this machine
+ * had ~25k characters of prose) so "where did we discuss X" works for something
+ * mentioned anywhere, not just in the opening line. The cap keeps a pathological
+ * session from dominating the index.
+ */
+export const SEARCH_TEXT_BUDGET = 20_000;
+
+/**
+ * Accumulate a bounded slice of conversation prose for the search index.
+ * Only user and assistant text is collected: tool output is noise here.
+ */
+export function addSearchText(acc: string[], role: string, text: string): void {
+  if (role !== "user" && role !== "assistant") return;
+  // Cap the accumulator so a pathological session cannot blow up memory. Well
+  // above the budget, because searchTextFrom samples both ends.
+  if (acc.length >= 400) return;
+  const clean = cleanText(text);
+  if (!clean) return;
+  acc.push(clip(clean, 4000));
+}
+
+/**
+ * Build the searchable excerpt from BOTH ends of the conversation.
+ *
+ * Taking only the opening was a real defect: the final turns are usually the
+ * densest (summaries, conclusions, the actual resolution), so a phrase from the
+ * end of a long session was unsearchable. Sampling head and tail covers the
+ * question "where did we discuss X" for most X.
+ */
+export function searchTextFrom(acc: string[]): string | null {
+  if (acc.length === 0) return null;
+  const full = acc.join(" ");
+  if (full.length <= SEARCH_TEXT_BUDGET) return full;
+  const half = Math.floor(SEARCH_TEXT_BUDGET / 2);
+  const head = full.slice(0, half).trimEnd();
+  const tail = full.slice(full.length - half).trimStart();
+  return `${head}\n\u2026\n${tail}`;
+}
+
 /** Count occurrences of tool names. */
 export function countTools(names: Iterable<string>): Map<string, number> {
   const map = new Map<string, number>();

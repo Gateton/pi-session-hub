@@ -6,6 +6,8 @@
  * so there are no native dependencies.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import type { ExternalSession, HarnessId, SessionDetail } from "../types.ts";
 import { exec, openIndexDb, type ReadOnlyDb } from "../sqlite.ts";
 
@@ -82,6 +84,14 @@ const SCHEMA = [
 ];
 
 export async function openIndex(dbPath: string): Promise<IndexHandle | null> {
+  // Create the parent directory so this works from any caller, not just the
+  // extension (which creates it separately). Without this, pointing the index at
+  // a fresh home silently fails and looks like "no sessions found".
+  try {
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  } catch {
+    return null;
+  }
   const db = await openIndexDb(dbPath);
   if (!db) return null;
   // WAL plus relaxed fsync keeps bulk indexing fast without risking corruption
@@ -173,6 +183,7 @@ export function ftsBody(session: ExternalSession): string {
   const parts = [
     session.title ?? "",
     session.preview ?? "",
+    session.searchText ?? "",
     session.repo ?? "",
     session.cwd ?? "",
     session.model ?? "",

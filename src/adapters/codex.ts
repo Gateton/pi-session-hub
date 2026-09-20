@@ -18,6 +18,7 @@ import { emptyFidelity } from "../types.ts";
 import type { NativeResumeAction, SessionAdapter } from "./types.ts";
 import { clip, cleanText } from "../security.ts";
 import {
+  addSearchText,
   countTools,
   deriveRepo,
   extractCommand,
@@ -27,6 +28,7 @@ import {
   pushCommand,
   readTextCapped,
   safeStat,
+  searchTextFrom,
   titleFromPreview,
   uniqSorted,
   walkFiles,
@@ -121,6 +123,7 @@ export class CodexAdapter implements SessionAdapter {
     let cliVersion: string | null = null;
 
     const messages: { role: string; text: string }[] = [];
+    const searchAcc: string[] = [];
     const toolNames: string[] = [];
     const commands: string[] = [];
     const filesChanged = new Set<string>();
@@ -182,6 +185,7 @@ export class CodexAdapter implements SessionAdapter {
       if (role !== "user" && role !== "assistant") continue;
       const prose = proseOnly(payload.content);
       if (!prose) continue;
+      addSearchText(searchAcc, role, prose);
       messageCount++;
 
       // Boilerplate-only turns (environment_context, skills_instructions) clean
@@ -219,6 +223,7 @@ export class CodexAdapter implements SessionAdapter {
         messageCount,
         toolCount: toolNames.length,
         preview: preview ? clip(preview, 160) : null,
+        searchText: searchTextFrom(searchAcc),
         fidelity: {
           ...emptyFidelity(),
           hasToolCalls: toolNames.length > 0,

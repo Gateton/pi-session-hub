@@ -27,6 +27,7 @@ import {
 import { scan } from "../src/index/scan.ts";
 import { assertWritableTarget, indexDir, isDeniedPath, redact } from "../src/security.ts";
 import { HARNESS_ORDER } from "../src/types.ts";
+import { buildFakeHome } from "./fixtures/fake-home.mjs";
 
 const home = os.homedir();
 const indexPath = path.join(indexDir(home), "index.sqlite");
@@ -674,6 +675,143 @@ check(
   fs.existsSync(indexPath),
   indexPath,
 );
+
+// ---------------------------------------------------------------------------
+section("11. Portability: a home this project has never seen");
+
+// The strongest portability check available: build a home directory that looks
+// nothing like this machine's, point the registry at it, and require every
+// adapter to discover, index and search its sessions. If anything were tied to a
+// fixed path or to this developer's setup, this fails.
+{
+  // Deliberately outside the real home, so "does it leak the developer's paths"
+  // is a meaningful question. os.tmpdir() can point inside $HOME.
+  const fakeHome = "/tmp/pi-session-hub-fake-home";
+  const { project: fakeProject } = await buildFakeHome(fakeHome);
+
+  const foreignRegistry = new AdapterRegistry(fakeHome);
+  const foreignDetections = await foreignRegistry.detectAll();
+  const detected = foreignDetections.filter((d) => d.status === "available");
+  check(
+    "all six harnesses are detected in a foreign home",
+    detected.length === 6,
+    foreignDetections.map((d) => `${d.harness}:${d.status}`).join(" "),
+  );
+  check(
+    "every detected harness reports exactly one session",
+    detected.every((d) => d.sessionCount === 1),
+    detected.map((d) => `${d.harness}:${d.sessionCount}`).join(" "),
+  );
+
+  const foreignIndexPath = path.join(fakeHome, ".pi", "agent", "pi-session-hub", "index.sqlite");
+  const foreignIndex = await openIndex(foreignIndexPath);
+  const foreignScan = await scan(foreignIndex, foreignRegistry, { force: true });
+  check("foreign home indexes cleanly", foreignScan.errors.length === 0, JSON.stringify(foreignScan.errors));
+  check("foreign home indexed six sessions", foreignScan.total === 6, `${foreignScan.total}`);
+  check(
+    "every harness contributed one session to the foreign index",
+    harnessCounts(foreignIndex).length === 6,
+    JSON.stringify(harnessCounts(foreignIndex)),
+  );
+
+  // The project path in the fake home must be what we report, not this machine's.
+  const foreignRows = querySessions(foreignIndex, { limit: 50 });
+  // Crush legitimately records no working directory, so only sessions that do
+  // report a project are held to this.
+  const withProject = foreignRows.filter((r) => (r.cwd ?? r.repo) != null);
+  check(
+    "sessions that record a project report the foreign one",
+    withProject.length >= 5 && withProject.every((r) => (r.cwd ?? r.repo).includes(fakeProject)),
+    `${withProject.length} of ${foreignRows.length}`,
+  );
+  check(
+    "every foreign session's source path lives under the foreign home",
+    foreignRows.every((r) => r.path.startsWith(fakeHome)),
+    foreignRows.map((r) => r.path).join(" "),
+  );
+  check(
+    "no foreign session field references this machine's home",
+    !foreignRows.some((r) =>
+      [r.path, r.cwd, r.repo, r.title, r.preview, r.model]
+        .filter(Boolean)
+        .some((v) => String(v).includes(home)),
+    ),
+  );
+
+  // Content from every harness must be recoverable and searchable.
+  // Probe phrases come from the ASSISTANT replies and appear nowhere in the
+  // titles, so matching them proves conversation text is indexed rather than
+  // just the opening line. This is the check that caught OpenCode indexing
+  // titles only.
+  const probes = [
+    ["pi", "regression test"],
+    ["claude-code", "partial index on created_at"],
+    ["codex", "backpressure"],
+    ["jcode", "two cohesive modules"],
+    ["crush", "exponential backoff"],
+    ["opencode", "covering index on title"],
+  ];
+  for (const [harness, phrase] of probes) {
+    const hits = querySessions(foreignIndex, { text: phrase, limit: 5 });
+    check(
+      `foreign ${harness} session is findable by its own words`,
+      hits.length > 0 && hits[0].harness === harness,
+      `${hits.length} hits${hits[0] ? `, first=${hits[0].harness}` : ""}`,
+    );
+    const adapter = foreignRegistry.get(harness);
+    const row = foreignRows.find((r) => r.harness === harness);
+    const detail = row ? await adapter.getSession(row.native_id) : null;
+    check(
+      `foreign ${harness} transcript is readable`,
+      detail !== null && detail.messages.length > 0,
+      detail ? `${detail.messages.length} messages` : "null",
+    );
+    check(
+      `foreign ${harness} transcript contains its own text`,
+      detail ? detail.messages.some((m) => m.text.includes(phrase.split(" ")[0])) : false,
+    );
+    check(
+      `foreign ${harness} yields a usable context package`,
+      detail ? buildTranscriptContext(detail).chars > 400 : false,
+    );
+  }
+
+  // Search must reach conversation text for every harness, not just titles. This
+  // is the check that caught OpenCode indexing titles only: the probe phrase is
+  // absent from the title and present only in the conversation.
+  for (const [harness, phrase] of probes) {
+    const row = foreignRows.find((r) => r.harness === harness);
+    if (!row) continue;
+    const fts = foreignIndex.db.get("select title, body from search where uid = ?", [row.uid]);
+    check(
+      `foreign ${harness}: the probe phrase is not in the title`,
+      !(fts?.title ?? "").toLowerCase().includes(phrase.toLowerCase()),
+      JSON.stringify(fts?.title),
+    );
+    check(
+      `foreign ${harness}: the index body carries the conversation, not just the title`,
+      (fts?.body ?? "").toLowerCase().includes(phrase.toLowerCase()),
+      `${(fts?.body ?? "").length} chars`,
+    );
+  }
+
+  // The index must live under the foreign home, never this one.
+  check("foreign index is written under the foreign home", fs.existsSync(foreignIndexPath));
+  check(
+    "writing outside the foreign index dir is still refused",
+    (() => {
+      try {
+        assertWritableTarget(path.join(fakeHome, ".claude", "x.jsonl"), fakeHome);
+        return false;
+      } catch {
+        return true;
+      }
+    })(),
+  );
+
+  foreignIndex.close();
+  fs.rmSync(fakeHome, { recursive: true, force: true });
+}
 
 // ---------------------------------------------------------------------------
 section("Summary");

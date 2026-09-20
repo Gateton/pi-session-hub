@@ -25,6 +25,7 @@ import type { NativeResumeAction, SessionAdapter } from "./types.ts";
 import { clip, cleanText } from "../security.ts";
 import { openReadOnly, type ReadOnlyDb } from "../sqlite.ts";
 import {
+  addSearchText,
   countTools,
   deriveRepo,
   extractCommand,
@@ -32,6 +33,7 @@ import {
   probePath,
   pushCommand,
   safeStat,
+  searchTextFrom,
   titleFromPreview,
   uniqSorted,
 } from "./util.ts";
@@ -233,9 +235,8 @@ export class OpenCodeAdapter implements SessionAdapter {
     const cwd = r.directory ?? null;
     const model = parseModel(r.model);
     const title = (r.title ?? "").trim() || null;
-    const tokens = (r.tokens_input ?? 0) + (r.tokens_output ?? 0);
-    void tokens;
-    void db;
+    const opening = this.readOpening(db, r.id);
+    const preview = opening.preview ?? (title ? clip(title, 160) : null);
     return {
       uid: `opencode:${r.id}`,
       harness: "opencode",
@@ -249,7 +250,8 @@ export class OpenCodeAdapter implements SessionAdapter {
       model,
       messageCount,
       toolCount: 0,
-      preview: title ? clip(title, 160) : null,
+      preview,
+      searchText: opening.searchText,
       fidelity: {
         ...emptyFidelity([
           "tool counts and changed files are loaded per session, not at list time",
@@ -262,6 +264,58 @@ export class OpenCodeAdapter implements SessionAdapter {
       mtimeMs: safeStat(this.dbPath)?.mtimeMs ?? 0,
       size: safeStat(this.dbPath)?.size ?? 0,
     };
+  }
+
+  /**
+   * First lines of real conversation text, used as the preview and as the body
+   * of the search index.
+   *
+   * OpenCode titles are good but they are not the conversation: without this, a
+   * search across hundreds of OpenCode sessions could only match titles. This
+   * uses `part_session_idx`, so it costs about a quarter of a millisecond per
+   * session rather than a full scan of the part table.
+   */
+  private readOpening(
+    db: ReadOnlyDb,
+    sessionId: string,
+  ): { preview: string | null; searchText: string | null } {
+    let parts: { data: string; mdata: string | null }[];
+    try {
+      parts = db.all<{ data: string; mdata: string | null }>(
+        `select p.data as data, m.data as mdata
+         from part p left join message m on m.id = p.message_id
+         where p.session_id = ? and p.data like '%"type":"text"%'
+         order by p.time_created, p.id limit 400`,
+        [sessionId],
+      );
+    } catch {
+      return { preview: null, searchText: null };
+    }
+    const searchAcc: string[] = [];
+    let preview: string | null = null;
+    for (const p of parts) {
+      try {
+        const o = JSON.parse(p.data) as Record<string, unknown>;
+        if (o.type !== "text" || typeof o.text !== "string") continue;
+        const clean = cleanText(o.text);
+        if (!clean) continue;
+        let role = "assistant";
+        if (p.mdata) {
+          try {
+            const m = JSON.parse(p.mdata) as Record<string, unknown>;
+            if (typeof m.role === "string") role = m.role;
+          } catch {
+            /* keep default */
+          }
+        }
+        addSearchText(searchAcc, role, clean);
+        if (!preview && role === "user") preview = clip(clean, 400);
+      } catch {
+        /* skip malformed part */
+      }
+    }
+    if (!preview && searchAcc.length > 0) preview = clip(searchAcc[0], 400);
+    return { preview, searchText: searchTextFrom(searchAcc) };
   }
 
   /** OpenCode keeps per-session file diffs on disk next to the database. */

@@ -21,12 +21,14 @@ import type { NativeResumeAction, SessionAdapter } from "./types.ts";
 import { clip, cleanText } from "../security.ts";
 import { openReadOnly } from "../sqlite.ts";
 import {
+  addSearchText,
   countTools,
   extractCommand,
   isoFromSec,
   probePath,
   pushCommand,
   safeStat,
+  searchTextFrom,
   titleFromPreview,
   uniqSorted,
 } from "./util.ts";
@@ -183,14 +185,28 @@ export class CrushAdapter implements SessionAdapter {
       .all<{ path: string }>("select distinct path from read_files where session_id = ?", [r.id])
       .map((x) => x.path);
 
-    const first = db.get<{ parts: string }>(
-      "select parts from messages where session_id = ? and role = 'user' order by created_at limit 1",
+    // One bounded read of the opening turns: enough for a preview and for the
+    // search index to cover the conversation, not just the title.
+    const opening = db.all<{ role: string; parts: string }>(
+      "select role, parts from messages where session_id = ? order by created_at, id limit 400",
       [r.id],
     );
     let preview: string | null = null;
-    if (first) {
+    const searchAcc: string[] = [];
+    for (const m of opening) {
       try {
-        const { text } = extractParts(JSON.parse(first.parts));
+        const { text } = extractParts(JSON.parse(m.parts));
+        const clean = cleanText(text);
+        if (!clean) continue;
+        addSearchText(searchAcc, m.role, clean);
+        if (!preview && m.role === "user") preview = clip(clean, 160);
+      } catch {
+        /* skip malformed parts */
+      }
+    }
+    if (!preview && opening.length > 0) {
+      try {
+        const { text } = extractParts(JSON.parse(opening[0].parts));
         const clean = cleanText(text);
         if (clean) preview = clip(clean, 160);
       } catch {
@@ -214,6 +230,7 @@ export class CrushAdapter implements SessionAdapter {
       messageCount: r.message_count ?? 0,
       toolCount: 0,
       preview,
+      searchText: searchTextFrom(searchAcc),
       fidelity: {
         ...emptyFidelity(["Crush does not record the session working directory"]),
         hasToolCalls: true,

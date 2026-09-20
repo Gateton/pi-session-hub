@@ -21,6 +21,7 @@ import { emptyFidelity } from "../types.ts";
 import type { NativeResumeAction, SessionAdapter } from "./types.ts";
 import { clip, cleanText } from "../security.ts";
 import {
+  addSearchText,
   countTools,
   deriveRepo,
   extractCommand,
@@ -29,6 +30,7 @@ import {
   pushCommand,
   readTextCapped,
   safeStat,
+  searchTextFrom,
   titleFromPreview,
   uniqSorted,
   walkFiles,
@@ -150,6 +152,7 @@ export class JCodeAdapter implements SessionAdapter {
       : null;
 
     const messages: { role: string; text: string }[] = [];
+    const searchAcc: string[] = [];
     const toolNames: string[] = [];
     const commands: string[] = [];
     const filesChanged = new Set<string>();
@@ -188,8 +191,9 @@ export class JCodeAdapter implements SessionAdapter {
         prose.push(content);
       }
 
-      if (!withMessages && role === "user" && messages.length >= 3) continue;
       const joined = cleanText(prose.join("\n"));
+      if (joined) addSearchText(searchAcc, role, joined);
+      if (!withMessages && role === "user" && messages.length >= 3) continue;
       if (joined) messages.push({ role, text: clip(joined, 4000) });
     }
 
@@ -221,6 +225,7 @@ export class JCodeAdapter implements SessionAdapter {
         messageCount,
         toolCount: toolNames.length,
         preview: preview ? clip(preview, 160) : null,
+        searchText: searchTextFrom(searchAcc),
         fidelity: {
           ...emptyFidelity(notes),
           hasToolCalls: toolNames.length > 0,

@@ -64,6 +64,12 @@ export interface ExternalSession {
   messageCount: number;
   toolCount: number;
   preview: string | null;
+  /**
+   * Bounded excerpt of the conversation used only to build the search index.
+   * Without it, search could only match titles and the opening line, which is
+   * not enough to answer "where did we discuss X".
+   */
+  searchText: string | null;
   fidelity: Fidelity;
   /** Source fingerprint, used for incremental reindexing. */
   mtimeMs: number;

@@ -24,6 +24,7 @@ import {
   cleanText,
 } from "../security.ts";
 import {
+  addSearchText,
   countTools,
   deriveRepo,
   extractCommand,
@@ -33,6 +34,7 @@ import {
   pushCommand,
   readTextCapped,
   safeStat,
+  searchTextFrom,
   titleFromPreview,
   uniqSorted,
   walkFiles,
@@ -147,6 +149,7 @@ export class ClaudeCodeAdapter implements SessionAdapter {
     let model: string | null = null;
 
     const messages: { role: string; text: string }[] = [];
+    const searchAcc: string[] = [];
     const toolNames: string[] = [];
     const commands: string[] = [];
     const filesChanged = new Set<string>();
@@ -222,6 +225,7 @@ export class ClaudeCodeAdapter implements SessionAdapter {
       // are enormous and would swamp both the preview and the search index.
       if (!isToolResultCarrier) {
         const t = proseOnly(content);
+        if (t) addSearchText(searchAcc, role, t);
         if (t) {
           const clean = clip(cleanText(t), 4000);
           if (clean) {
@@ -261,6 +265,7 @@ export class ClaudeCodeAdapter implements SessionAdapter {
         messageCount,
         toolCount: toolNames.length,
         preview,
+        searchText: searchTextFrom(searchAcc),
         fidelity: {
           ...emptyFidelity(
             isSub

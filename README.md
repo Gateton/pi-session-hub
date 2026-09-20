@@ -254,7 +254,13 @@ Example handoff header:
   `request_dump_*` and similar are denied by name before any open is attempted.
 - Transcript text is passed through a redactor (Bearer tokens, `sk-` keys, JWTs,
   `api_key=`/`password=` patterns) before being stored or written into a handoff.
-- The FTS index stores titles, previews and metadata, not full transcripts.
+- The FTS index stores a **bounded excerpt of the conversation** per session
+  (20k characters, sampled from both the start and the end) plus titles and
+  metadata, so search can answer "where did we discuss X" rather than only
+  matching titles. It is a second local copy of some conversation text: if you
+  back up `~/.pi`, the index goes with it. Delete
+  `~/.pi/agent/pi-session-hub/index.sqlite` to remove it; it is rebuilt on the
+  next scan.
 
 ## Architecture
 
@@ -367,8 +373,10 @@ Both are covered by regression tests.
   cost fields until the adapter is updated.
 - **Crush does not record a session working directory**, so those sessions show no
   repo and cannot be filtered by project.
-- **Transcripts are capped** at roughly 800 messages per session by the reader's
+- **Transcripts are capped** at roughly 2000 messages per session by the reader's
   budget. When that happens the viewer says so rather than silently truncating.
+- **Search covers a bounded excerpt**, not the entire history of a very long
+  session. Phrases from beyond the sampled window will not match.
 - **Claude sub-agent transcripts** are indexed (they contain real work) but are
   marked as not resumable and carry their parent session id in the notes.
 - The hub shows metadata and previews. It is a context router, not a full transcript
