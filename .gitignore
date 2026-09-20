@@ -1,0 +1,11 @@
+node_modules/
+npm-debug.log*
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# The hub's own index is local state, never committed.
+index.sqlite
+index.sqlite-shm
+index.sqlite-wal

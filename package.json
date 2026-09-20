@@ -1,0 +1,53 @@
+{
+  "name": "pi-session-hub",
+  "version": "0.1.0",
+  "description": "Cross-harness session hub for Pi: browse, search and continue sessions from Claude Code, Codex, OpenCode, Crush and JCode without leaving your chat.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Gateton",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "sessions",
+    "session",
+    "resume",
+    "handoff",
+    "claude-code",
+    "codex",
+    "opencode",
+    "crush",
+    "jcode"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gateton/pi-session-hub.git"
+  },
+  "homepage": "https://github.com/Gateton/pi-session-hub#readme",
+  "bugs": {
+    "url": "https://github.com/Gateton/pi-session-hub/issues"
+  },
+  "pi": {
+    "extensions": ["./extensions"],
+    "skills": ["./skills"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "files": [
+    "extensions",
+    "src",
+    "skills",
+    "test",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/acceptance.mjs",
+    "test:smoke": "node test/smoke.mjs"
+  }
+}
