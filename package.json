@@ -27,8 +27,13 @@
     "url": "https://github.com/Gateton/pi-session-hub/issues"
   },
   "pi": {
-    "extensions": ["./extensions"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "image": "https://raw.githubusercontent.com/Gateton/pi-session-hub/main/assets/session-hub.png"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

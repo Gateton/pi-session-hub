@@ -22,6 +22,13 @@ export interface Badge {
     | "toolTitle";
 }
 
+/**
+ * Symbols were checked against actual font coverage rather than assumed:
+ * U+273B (the obvious Claude sparkle), U+2B21 and U+2315 are absent from
+ * JetBrainsMono Nerd Font, and would render as tofu boxes. These are present in
+ * that font and in the broadly available Geometric Shapes / Misc Technical
+ * blocks, so they degrade gracefully on other setups.
+ */
 const BADGES: Record<HarnessId, Badge> = {
   pi: { icon: "\u03c0", color: "accent" },
   "claude-code": { icon: "\u273b", color: "warning" },
@@ -31,7 +38,33 @@ const BADGES: Record<HarnessId, Badge> = {
   jcode: { icon: "\u25c6", color: "mdCode" },
 };
 
+/**
+ * Plain-ASCII markers, for terminals whose font has no Geometric Shapes or Misc
+ * Technical coverage. Enabled with PI_SESSION_HUB_ASCII=1 or
+ * { "sessionHub": { "ascii": true } }.
+ */
+const ASCII_BADGES: Record<HarnessId, Badge> = {
+  pi: { icon: "P", color: "accent" },
+  "claude-code": { icon: "C", color: "warning" },
+  codex: { icon: "X", color: "success" },
+  opencode: { icon: "O", color: "mdLink" },
+  crush: { icon: "R", color: "mdQuote" },
+  jcode: { icon: "J", color: "mdCode" },
+};
+
+let asciiMode: boolean | null = null;
+
+/** Whether to use plain ASCII markers instead of symbols. */
+export function setAsciiMode(on: boolean): void {
+  asciiMode = on;
+}
+
 export function badgeFor(harness: HarnessId): Badge {
+  if (asciiMode === null) {
+    asciiMode =
+      process.env.PI_SESSION_HUB_ASCII === "1" || process.env.PI_SESSION_HUB_ASCII === "true";
+  }
+  if (asciiMode) return ASCII_BADGES[harness] ?? { icon: "?", color: "muted" };
   return BADGES[harness] ?? { icon: "?", color: "muted" };
 }
 

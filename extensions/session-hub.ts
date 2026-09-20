@@ -45,7 +45,10 @@ import type { DetectionResult, ExternalSession, HarnessId } from "../src/types.t
 import { HARNESS_LABEL, HARNESS_ORDER } from "../src/types.ts";
 
 export default function sessionHub(pi: ExtensionAPI) {
-  const home = os.homedir();
+  // The hub always reads the real user's home unless explicitly pointed
+  // elsewhere. PI_SESSION_HUB_HOME exists for tests and for producing demo
+  // screenshots from a synthetic home, never as a normal user-facing setting.
+  const home = process.env.PI_SESSION_HUB_HOME || os.homedir();
   const registry = new AdapterRegistry(home);
 
   let index: IndexHandle | null = null;

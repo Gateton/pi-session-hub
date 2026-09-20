@@ -1,5 +1,9 @@
 # pi-session-hub
 
+<p align="center">
+  <img src="assets/session-hub.png" alt="pi-session-hub: sessions from JCode, OpenCode, Pi, Claude Code, Codex and Crush in one list" width="100%">
+</p>
+
 One list for every coding-agent session on your machine.
 
 `pi-session-hub` indexes the local session stores of **Pi, Claude Code, Codex,
@@ -188,6 +192,10 @@ application.
 Also: `page up/down`, `home`/`end`, and `j`/`k` work as expected. The list shows a
 position indicator (`1-10 of 434`) and the detail pane scrolls independently with
 `Tab` then `↑`/`↓`.
+
+The screenshot above is the real UI, captured from a synthetic home directory
+(`node test/tools/demo-home.mjs`) so every harness appears at once. It is
+illustrative data, not anyone's actual sessions.
 
 ## What it reads
 

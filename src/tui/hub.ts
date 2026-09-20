@@ -59,7 +59,7 @@ const BT = "\u2534";
 const CROSS = "\u253c";
 
 // Interface glyphs (symbols, not emoji)
-const G_SEARCH = "\u2315";
+const G_SEARCH = "\u25ce";
 const G_ENTER = "\u23ce";
 const G_TAB = "\u21e5";
 const G_UP = "\u2191";
@@ -283,20 +283,10 @@ export class HubComponent implements Component {
       return;
     }
     if (data === "p") return this.cycleRepo();
-    if (data === "0") {
-      this.harness = null;
-      this.selected = 0;
-      this.applyFilter();
-      this.invalidate();
-      return;
-    }
+    if (data === "0") return this.refilter(null);
     const digit = Number.parseInt(data, 10);
     if (!Number.isNaN(digit) && digit >= 1 && digit <= HARNESS_ORDER.length) {
-      this.harness = HARNESS_ORDER[digit - 1] ?? null;
-      this.selected = 0;
-      this.applyFilter();
-      this.invalidate();
-      return;
+      return this.refilter(HARNESS_ORDER[digit - 1] ?? null);
     }
     if (this.focus === "detail") {
       if (data === "K") this.detailScroll = Math.max(0, this.detailScroll - 3);
@@ -324,7 +314,10 @@ export class HubComponent implements Component {
       if (which === "query") this.query += data;
       else this.fileQuery += data;
       this.selected = 0;
+      this.offset = 0;
+      this.detailScroll = 0;
       this.applyFilter();
+      this.ensureDetail();
       this.invalidate();
     }
   }
@@ -345,14 +338,29 @@ export class HubComponent implements Component {
     this.invalidate();
   }
 
+  /**
+   * Apply a filter change and refresh the detail pane.
+   *
+   * Forgetting the detail refresh was a real defect: changing the harness or repo
+   * filter left the transcript pane showing "no messages recovered" until the
+   * user happened to press an arrow key.
+   */
+  private refilter(harness: HarnessId | null): void {
+    this.harness = harness;
+    this.selected = 0;
+    this.offset = 0;
+    this.detailScroll = 0;
+    this.applyFilter();
+    this.ensureDetail();
+    this.invalidate();
+  }
+
   private cycleRepo(): void {
     if (this.repos.length === 0) return;
     const idx = this.repo ? this.repos.indexOf(this.repo) : -1;
     const next = idx + 1;
     this.repo = next >= this.repos.length ? null : (this.repos[next] ?? null);
-    this.selected = 0;
-    this.applyFilter();
-    this.invalidate();
+    this.refilter(this.harness);
   }
 
   private ensureDetail(): void {
