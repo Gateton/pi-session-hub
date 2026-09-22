@@ -1,6 +1,6 @@
 {
   "name": "pi-session-hub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Cross-harness session hub for Pi: browse, search and continue sessions from Claude Code, Codex, OpenCode, Crush and JCode without leaving your chat.",
   "type": "module",
   "license": "MIT",
