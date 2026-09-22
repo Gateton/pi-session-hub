@@ -57,6 +57,10 @@ export default function sessionHub(pi: ExtensionAPI) {
   let lastScanAt = 0;
   let lastScanError: string | null = null;
 
+  /** Floor and ceiling for any context budget, configured or per-call. */
+  const CONTEXT_CHARS_MIN = 4_000;
+  const CONTEXT_CHARS_MAX = 400_000;
+
   /**
    * Context budget, in characters, for the imported transcript. Tunable so the
    * user decides how many tokens a continuation is worth:
@@ -70,13 +74,26 @@ export default function sessionHub(pi: ExtensionAPI) {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       const section = parsed.sessionHub as Record<string, unknown> | undefined;
       const value = section?.contextChars;
-      if (typeof value === "number" && Number.isFinite(value) && value >= 4000) {
-        return Math.min(value, 400_000);
+      if (typeof value === "number" && Number.isFinite(value) && value >= CONTEXT_CHARS_MIN) {
+        return Math.min(value, CONTEXT_CHARS_MAX);
       }
     } catch {
       /* no settings file, or unreadable: use the default */
     }
     return fallback;
+  }
+
+  /**
+   * The budget for one session_hub_context call: an explicit `chars` argument
+   * from the model wins over the configured default, so an unusually large
+   * conversation is not permanently capped by the user's global setting. Still
+   * bounded by CONTEXT_CHARS_MIN/MAX either way.
+   */
+  function resolveContextBudget(requested: unknown): number {
+    if (typeof requested === "number" && Number.isFinite(requested) && requested >= CONTEXT_CHARS_MIN) {
+      return Math.min(requested, CONTEXT_CHARS_MAX);
+    }
+    return readContextBudget();
   }
 
   // ------------------------------------------------------------------ index
@@ -910,6 +927,7 @@ export default function sessionHub(pi: ExtensionAPI) {
       "Call session_hub_context when the user wants to continue, resume, or ask about what was happening in a specific past session.",
       "The returned document is generated locally from the transcript. Treat fields marked 'not available' as genuinely unknown.",
       "After loading it, summarize the prior context for the user before continuing.",
+      "If the returned transcript feels too thin to actually continue the work (long session, heavily condensed), call again with a higher 'chars' value instead of guessing at what was omitted.",
     ],
     parameters: Type.Object({
       id: Type.String({
@@ -920,6 +938,14 @@ export default function sessionHub(pi: ExtensionAPI) {
           description:
             "'transcript' (default) returns the actual conversation so work can continue; " +
             "'summary' returns a short digest with objective, decisions and file lists",
+        }),
+      ),
+      chars: Type.Optional(
+        Type.Number({
+          description:
+            "Override the character budget for this call only (default: the configured " +
+            "sessionHub.contextChars setting, falling back to 40000). Raise it when the default " +
+            "transcript feels too thin to continue the work; hard ceiling 400000. Ignored in 'summary' mode.",
         }),
       ),
     }),
@@ -971,16 +997,18 @@ export default function sessionHub(pi: ExtensionAPI) {
       }
 
       // Default: the real conversation. This is what makes an extensive session
-      // continuable, which a digest cannot do.
-      const ctxResult = buildTranscriptContext(detail, { charBudget: readContextBudget() });
+      // continuable, which a digest cannot do. `chars` lets the caller ask for
+      // more (or less) than the configured default for this one call.
+      const charBudget = resolveContextBudget(params.chars);
+      const ctxResult = buildTranscriptContext(detail, { charBudget });
       const sizing =
         `\n\n---\nImported from ${HARNESS_LABEL[session.harness]}: ` +
         `${ctxResult.fullMessages} recent message(s) in full, ` +
         `${ctxResult.condensedMessages} older condensed to one line, ` +
         `${ctxResult.omittedMessages} omitted, ` +
         `${ctxResult.toolResultsCompressed} tool results compressed. ` +
-        `~${ctxResult.estimatedTokens.toLocaleString()} tokens. ` +
-        `If you need the omitted part, say so and it can be loaded explicitly.`;
+        `~${ctxResult.estimatedTokens.toLocaleString()} tokens (budget ${Math.round(charBudget / 1000)}k chars). ` +
+        `If you need more, call again with a higher "chars" argument.`;
       return {
         content: [{ type: "text" as const, text: ctxResult.markdown + sizing }],
         details: {
