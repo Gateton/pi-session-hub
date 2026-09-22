@@ -418,10 +418,31 @@ const ctxHeaderFields = [
 
 let comparedHarnesses = 0;
 for (const adapter of registry.all()) {
-  const row = rows.find((r) => r.harness === adapter.id && r.message_count > 3);
-  if (!row) continue;
-  const detail = await adapter.getSession(row.native_id);
-  if (!detail || detail.messages.length === 0) continue;
+  // The most-recently-updated session with enough messages is not always a
+  // good sample: a short dogfooding exchange (e.g. testing `/hub list`
+  // itself) can outrank real work in recency while carrying no message over
+  // 80 chars. Walk candidates, most recent first, until one actually has
+  // substantive content, instead of judging the invariant against whichever
+  // row happened to sort first.
+  const candidates = rows.filter((r) => r.harness === adapter.id && r.message_count > 3);
+  if (candidates.length === 0) continue;
+
+  let detail = null;
+  let substantive = [];
+  for (const row of candidates) {
+    const candidateDetail = await adapter.getSession(row.native_id);
+    if (!candidateDetail || candidateDetail.messages.length === 0) continue;
+    const candidateSubstantive = candidateDetail.messages.filter((m) => m.text.trim().length > 80);
+    if (candidateSubstantive.length > 0) {
+      detail = candidateDetail;
+      substantive = candidateSubstantive;
+      break;
+    }
+    // Keep the first readable one as a fallback so a harness with only short
+    // sessions still gets compared (and reported honestly) instead of skipped.
+    if (!detail) detail = candidateDetail;
+  }
+  if (!detail) continue;
   comparedHarnesses++;
 
   const ctx = buildTranscriptContext(detail);
@@ -433,7 +454,6 @@ for (const adapter of registry.all()) {
   // The invariant that actually makes continuation work: the transcript must
   // carry messages from the beginning, middle and end of the conversation. A
   // digest only ever carries a few excerpts from the end.
-  const substantive = detail.messages.filter((m) => m.text.trim().length > 80);
   const probes = [
     substantive[0],
     substantive[Math.floor(substantive.length / 2)],
